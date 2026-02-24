@@ -1,0 +1,71 @@
+-- 1. EXTENSIONS (For UUID generation)
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- 2. ENUM TYPES
+CREATE TYPE location_type AS ENUM ('DISTRICT', 'SECTOR');
+CREATE TYPE user_role AS ENUM ('MAYOR', 'SECTOR_LEADER', 'AUDITOR', 'HIGHER_LEADER');
+CREATE TYPE task_category AS ENUM ('SOCIAL', 'INFRASTRUCTURE', 'ECONOMY');
+CREATE TYPE task_status AS ENUM ('PENDING', 'ONGOING', 'DELAYED', 'UNDER_REVIEW', 'COMPLETED');
+CREATE TYPE file_format AS ENUM ('IMAGE', 'VIDEO', 'PDF');
+
+-- 3. TABLES
+
+-- Locations Hierarchy
+CREATE TABLE locations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(100) NOT NULL,
+    type location_type NOT NULL,
+    parent_id UUID REFERENCES locations(id) ON DELETE CASCADE
+);
+
+-- Verified Users
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    full_name VARCHAR(255) NOT NULL,
+    national_id VARCHAR(16) UNIQUE NOT NULL,
+    phone_number VARCHAR(15) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role user_role NOT NULL,
+    location_id UUID REFERENCES locations(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Imihigo Tasks
+CREATE TABLE imihigo_tasks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sector_id UUID REFERENCES locations(id) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    category task_category NOT NULL,
+    status task_status DEFAULT 'PENDING',
+    completion_pct INTEGER CHECK (completion_pct >= 0 AND completion_pct <= 100) DEFAULT 0,
+    metrics JSONB, -- Stores {"unit": "cows", "target": 50, "current": 10}
+    due_date DATE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Proof of Work (Evidence)
+CREATE TABLE task_evidence (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    task_id UUID REFERENCES imihigo_tasks(id) ON DELETE CASCADE,
+    file_url TEXT NOT NULL,
+    file_type file_format NOT NULL,
+    metadata JSONB NOT NULL, -- Stores {"lat": -1.94, "long": 30.06, "timestamp": "..."}
+    uploaded_by UUID REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Feedback & Audit Logs
+CREATE TABLE comments_audit (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    task_id UUID REFERENCES imihigo_tasks(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id),
+    message TEXT NOT NULL,
+    action_type VARCHAR(50), -- e.g., 'REJECTED', 'APPROVED', 'COMMENT'
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 4. INDEXES (For Fast Searching by District/Sector)
+CREATE INDEX idx_locations_parent ON locations(parent_id);
+CREATE INDEX idx_tasks_sector ON imihigo_tasks(sector_id);
+CREATE INDEX idx_users_location ON users(location_id);

@@ -1,9 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,9 +9,130 @@ datasource db {
   provider = "postgresql"
 }
 
+enum LocationType {
+  DISTRICT
+  SECTOR
+}
+
+enum UserRole {
+  MAYOR
+  SECTOR_LEADER
+  AUDITOR
+  HIGHER_LEADER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum TaskCategory {
+  SOCIAL
+  INFRASTRUCTURE
+  ECONOMY
+}
+
+enum TaskStatus {
+  PENDING
+  ONGOING
+  DELAYED
+  UNDER_REVIEW
+  COMPLETED
+}
+
+enum FileFormat {
+  IMAGE
+  VIDEO
+  PDF
+}
+
+model Location {
+  id        String       @id @default(uuid()) @db.Uuid
+  name      String       @db.VarChar(100)
+  type      LocationType
+  parent_id String?      @db.Uuid
+  parent    Location?    @relation("LocationHierarchy", fields: [parent_id], references: [id], onDelete: Cascade)
+  children  Location[]   @relation("LocationHierarchy")
+  users     User[]
+  tasks     ImihigoTask[]
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp()
+
+  @@map("locations")
+}
+
 model User {
-  id    Int     @id @default(autoincrement())
-  email String  @unique
-  password String
-  name String?
+  id           String         @id @default(uuid()) @db.Uuid
+  fullName     String         @map("full_name") @db.VarChar(255)
+  nationalId   String         @unique @map("national_id") @db.VarChar(16)
+  phoneNumber  String         @map("phone_number") @db.VarChar(15)
+  email        String         @unique @db.VarChar(255)
+  passwordHash String         @map("password_hash")
+  role         UserRole
+  status       UserStatus     @default(ACTIVE)
+  locationId   String?        @map("location_id") @db.Uuid
+  location     Location?      @relation(fields: [locationId], references: [id])
+  
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamp()
+  
+  evidence     TaskEvidence[]
+  comments     CommentAudit[]
+
+  @@index([email])
+  @@index([nationalId])
+  @@map("users")
+}
+
+model ImihigoTask {
+  id            String         @id @default(uuid()) @db.Uuid
+  sectorId      String         @map("sector_id") @db.Uuid
+  sector        Location       @relation(fields: [sectorId], references: [id])
+  title         String         @db.VarChar(255)
+  category      TaskCategory
+  status        TaskStatus     @default(PENDING)
+  completionPct Int            @default(0) @map("completion_pct")
+  metrics       Json?          @db.JsonB
+  dueDate       DateTime       @map("due_date") @db.Date
+  
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamp()
+  
+  evidence      TaskEvidence[]
+  comments      CommentAudit[]
+
+  @@map("imihigo_tasks")
+}
+
+model TaskEvidence {
+  id         String     @id @default(uuid()) @db.Uuid
+  taskId     String     @map("task_id") @db.Uuid
+  task       ImihigoTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  fileUrl    String     @map("file_url")
+  fileType   FileFormat @map("file_type")
+  metadata   Json       @db.JsonB
+  uploadedBy String?    @map("uploaded_by") @db.Uuid
+  user       User?      @relation(fields: [uploadedBy], references: [id])
+  
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt  DateTime   @updatedAt @map("updated_at") @db.Timestamp()
+
+  @@map("task_evidence")
+}
+
+model CommentAudit {
+  id         String      @id @default(uuid()) @db.Uuid
+  taskId     String      @map("task_id") @db.Uuid
+  task       ImihigoTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId     String?     @map("user_id") @db.Uuid
+  user       User?       @relation(fields: [userId], references: [id])
+  message    String      @db.Text
+  actionType String?     @map("action_type") @db.VarChar(50)
+  
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt  DateTime    @updatedAt @map("updated_at") @db.Timestamp()
+
+  @@map("comments_audit")
 }

@@ -1,0 +1,82 @@
+{
+    "auth": {
+        "register": {
+            "mayor": {
+                "url": "{{host}}/auth/register",
+                "method": "POST",
+                "body": {
+                    "email": "mayor.test@gov.rw",
+                    "password": "Password123!",
+                    "fullName": "Mayor Jean",
+                    "nationalId": "1234567890123456",
+                    "phoneNumber": "+250788000001",
+                    "role": "MAYOR",
+                    "locationName": "Kigali",
+                    "locationType": "DISTRICT"
+                }
+            },
+            "sector_leader": {
+                "url": "{{host}}/auth/register",
+                "method": "POST",
+                "body": {
+                    "email": "sector.test@gov.rw",
+                    "password": "Password123!",
+                    "fullName": "Leader Paul",
+                    "nationalId": "1234567890654321",
+                    "phoneNumber": "+250788000002",
+                    "role": "SECTOR_LEADER",
+                    "locationName": "Nyiranuma",
+                    "locationType": "SECTOR"
+                }
+            },
+            "higher_leader": {
+                "url": "{{host}}/auth/register",
+                "method": "POST",
+                "body": {
+                    "email": "minister.test@gov.rw",
+                    "password": "Password123!",
+                    "fullName": "Minister Marie",
+                    "nationalId": "1111222233334444",
+                    "phoneNumber": "+250788000003",
+                    "role": "HIGHER_LEADER"
+                }
+            }
+        },
+        "login": {
+            "url": "{{host}}/auth/login",
+            "method": "POST",
+            "body": {
+                "email": "mayor.test@gov.rw",
+                "password": "Password123!"
+            }
+        },
+        "get_all_users": {
+            "description": "Requires MAYOR or HIGHER_LEADER role",
+            "url": "{{host}}/auth/users",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "get_user_by_id": {
+            "description": "Requires valid JWT token",
+            "url": "{{host}}/auth/users/{{user_id}}",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "delete_user": {
+            "description": "Requires HIGHER_LEADER role",
+            "url": "{{host}}/auth/users/{{user_id}}",
+            "method": "DELETE",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        }
+    },
+    "variables": {
+        "host": "http://localhost:3001",
+        "notes": "Replace {{jwt_token}} and {{user_id}} with actual values from login/register responses."
+    }
+}
