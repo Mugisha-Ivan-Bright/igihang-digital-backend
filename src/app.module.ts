@@ -8,5 +8,5 @@ import { PrismaModule } from './prisma/prisma.module';
   imports: [AuthModule, PrismaModule],
   controllers: [AppController],
   providers: [AppService],
-})
+})  
 export class AppModule {}

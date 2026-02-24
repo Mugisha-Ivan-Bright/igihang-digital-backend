@@ -1,26 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { CreateAuthDto } from './dto/create-auth.dto';
 import { UpdateAuthDto } from './dto/update-auth.dto';
-import { Prisma } from 'generated/prisma';
-import { PrismaService } from 'src/prisma/prisma.service';
-
-@Injectable()
+import { PrismaService } from '../prisma/prisma.service.js';
 export class AuthService {
-  constructor(private prisma: PrismaService) {    }
+  constructor(@Inject('PRISMA_TOKEN') private readonly prisma: PrismaService) { 
+    console.log('--- DIAGNOSTIC START ---');
+    console.log('The prisma object is:', this.prisma);
+    console.log('--- DIAGNOSTIC END ---');
+     }
   async create(createAuthDto: CreateAuthDto) {
-    const salt = await bcrypt.genSalt();  
-    const hashedPassword = await bcrypt.hash(createAuthDto.password, salt);
-
     return this.prisma.user.create({
-      data: {
-        email: createAuthDto.email,
-        password: hashedPassword,
-      },
-      select : {
-        id: true,
-        email: true,
-      }
+      data: createAuthDto,
     });
   }
 
