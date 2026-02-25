@@ -1,44 +1,42 @@
 {
     "auth": {
         "register": {
+            "super_admin": {
+                "url": "{{host}}/auth/register",
+                "method": "POST",
+                "body": {
+                    "email": "admin@gov.rw",
+                    "password": "Password123!",
+                    "name": "Super Admin",
+                    "nationalId": "1111222233334444",
+                    "role": "SUPER_ADMIN",
+                    "adminUnitId": 1
+                }
+            },
             "mayor": {
                 "url": "{{host}}/auth/register",
                 "method": "POST",
                 "body": {
                     "email": "mayor.test@gov.rw",
                     "password": "Password123!",
-                    "fullName": "Mayor Jean",
+                    "name": "Mayor Jean",
                     "nationalId": "1234567890123456",
-                    "phoneNumber": "+250788000001",
                     "role": "MAYOR",
-                    "locationName": "Kigali",
-                    "locationType": "DISTRICT"
+                    "adminUnitId": 6,
+                    "latitude": -1.9441,
+                    "longitude": 30.0619
                 }
             },
-            "sector_leader": {
+            "executive_sec": {
                 "url": "{{host}}/auth/register",
                 "method": "POST",
                 "body": {
-                    "email": "sector.test@gov.rw",
+                    "email": "exec.test@gov.rw",
                     "password": "Password123!",
-                    "fullName": "Leader Paul",
+                    "name": "Exec Sec Paul",
                     "nationalId": "1234567890654321",
-                    "phoneNumber": "+250788000002",
-                    "role": "SECTOR_LEADER",
-                    "locationName": "Nyiranuma",
-                    "locationType": "SECTOR"
-                }
-            },
-            "higher_leader": {
-                "url": "{{host}}/auth/register",
-                "method": "POST",
-                "body": {
-                    "email": "minister.test@gov.rw",
-                    "password": "Password123!",
-                    "fullName": "Minister Marie",
-                    "nationalId": "1111222233334444",
-                    "phoneNumber": "+250788000003",
-                    "role": "HIGHER_LEADER"
+                    "role": "EXECUTIVE_SEC",
+                    "adminUnitId": 9
                 }
             }
         },
@@ -51,7 +49,7 @@
             }
         },
         "get_all_users": {
-            "description": "Requires MAYOR or HIGHER_LEADER role",
+            "description": "Requires SUPER_ADMIN or GOVERNOR role",
             "url": "{{host}}/auth/users",
             "method": "GET",
             "headers": {
@@ -67,16 +65,16 @@
             }
         },
         "delete_user": {
-            "description": "Requires HIGHER_LEADER role",
+            "description": "Requires SUPER_ADMIN role",
             "url": "{{host}}/auth/users/{{user_id}}",
-            "method": "DELETE",
+            "method": "DELETE",     
             "headers": {
                 "Authorization": "Bearer {{jwt_token}}"
             }
         }
     },
     "variables": {
-        "host": "http://localhost:3001",
-        "notes": "Replace {{jwt_token}} and {{user_id}} with actual values from login/register responses."
+        "host": "http://localhost:3001",    
+        "notes": "Note: user_id is now an INTEGER. Replace {{jwt_token}} and {{user_id}} with actual values."
     }
 }

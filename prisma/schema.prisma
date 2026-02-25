@@ -9,130 +9,130 @@ datasource db {
   provider = "postgresql"
 }
 
-enum LocationType {
+enum AdminLevel {
+  PROVINCE
   DISTRICT
   SECTOR
+  CELL
+  VILLAGE
 }
 
 enum UserRole {
+  SUPER_ADMIN
+  GOVERNOR
   MAYOR
-  SECTOR_LEADER
-  AUDITOR
-  HIGHER_LEADER
-}
-
-enum UserStatus {
-  ACTIVE
-  INACTIVE
-  SUSPENDED
-}
-
-enum TaskCategory {
-  SOCIAL
-  INFRASTRUCTURE
-  ECONOMY
+  EXECUTIVE_SEC
+  VILLAGE_CHIEF
 }
 
 enum TaskStatus {
   PENDING
-  ONGOING
-  DELAYED
-  UNDER_REVIEW
+  IN_PROGRESS
   COMPLETED
+  OVERDUE
 }
 
-enum FileFormat {
-  IMAGE
-  VIDEO
-  PDF
-}
-
-model Location {
-  id        String       @id @default(uuid()) @db.Uuid
-  name      String       @db.VarChar(100)
-  type      LocationType
-  parent_id String?      @db.Uuid
-  parent    Location?    @relation("LocationHierarchy", fields: [parent_id], references: [id], onDelete: Cascade)
-  children  Location[]   @relation("LocationHierarchy")
+model AdminUnit {
+  id        Int        @id @default(autoincrement())
+  name      String
+  level     AdminLevel
+  code      String     @unique
+  parentId  Int?       @map("parentId")
+  parent    AdminUnit? @relation("AdminHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children  AdminUnit[] @relation("AdminHierarchy")
+  
   users     User[]
   tasks     ImihigoTask[]
+  locations Location[]
 
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp()
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp()
+  createdAt DateTime @default(now()) @map("createdAt")
 
-  @@map("locations")
+  @@map("AdminUnit")
 }
 
 model User {
-  id           String         @id @default(uuid()) @db.Uuid
-  fullName     String         @map("full_name") @db.VarChar(255)
-  nationalId   String         @unique @map("national_id") @db.VarChar(16)
-  phoneNumber  String         @map("phone_number") @db.VarChar(15)
-  email        String         @unique @db.VarChar(255)
-  passwordHash String         @map("password_hash")
+  id           Int        @id @default(autoincrement())
+  nationalId   String     @unique @map("national_id")
+  email        String     @unique
+  passwordHash String     @map("password")
+  name         String
   role         UserRole
-  status       UserStatus     @default(ACTIVE)
-  locationId   String?        @map("location_id") @db.Uuid
-  location     Location?      @relation(fields: [locationId], references: [id])
+  adminUnitId  Int?       @map("adminUnitId")
+  adminUnit    AdminUnit? @relation(fields: [adminUnitId], references: [id])
   
-  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamp()
-  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamp()
-  
-  evidence     TaskEvidence[]
-  comments     CommentAudit[]
+  issuedTasks   ImihigoTask[] @relation("IssuerTasks")
+  assignedTasks ImihigoTask[] @relation("AssigneeTasks")
+  evidence      TaskEvidence[]
+  comments      CommentAudit[]
+  location      Location[]
 
-  @@index([email])
-  @@index([nationalId])
-  @@map("users")
+  createdAt    DateTime    @default(now()) @map("createdAt")
+
+  @@map("User")
 }
 
 model ImihigoTask {
-  id            String         @id @default(uuid()) @db.Uuid
-  sectorId      String         @map("sector_id") @db.Uuid
-  sector        Location       @relation(fields: [sectorId], references: [id])
-  title         String         @db.VarChar(255)
-  category      TaskCategory
-  status        TaskStatus     @default(PENDING)
-  completionPct Int            @default(0) @map("completion_pct")
-  metrics       Json?          @db.JsonB
-  dueDate       DateTime       @map("due_date") @db.Date
+  id          Int        @id @default(autoincrement())
+  title       String
+  description String?
+  status      TaskStatus @default(PENDING)
+  deadline    DateTime
   
-  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamp()
-  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamp()
+  issuerId    Int        @map("issuerId")
+  issuer      User       @relation("IssuerTasks", fields: [issuerId], references: [id])
+  assigneeId  Int        @map("assigneeId")
+  assignee    User       @relation("AssigneeTasks", fields: [assigneeId], references: [id])
+  unitId      Int        @map("unitId")
+  unit        AdminUnit  @relation(fields: [unitId], references: [id])
   
-  evidence      TaskEvidence[]
-  comments      CommentAudit[]
+  locations   Location[]
+  evidence    TaskEvidence[]
+  comments    CommentAudit[]
 
-  @@map("imihigo_tasks")
+  createdAt   DateTime   @default(now()) @map("createdAt")
+  updatedAt   DateTime   @default(now()) @updatedAt @map("updatedAt")
+
+  @@map("ImihigoTask")
+}
+
+model Location {
+  id          Int        @id @default(autoincrement())
+  latitude    Decimal    @db.Decimal(10, 8)
+  longitude   Decimal    @db.Decimal(11, 8)
+  adminUnitId Int?       @map("adminUnitId")
+  adminUnit   AdminUnit? @relation(fields: [adminUnitId], references: [id])
+  taskId      Int?       @map("taskId")
+  task        ImihigoTask? @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId      Int?       @map("userId")
+  user        User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("Location")
 }
 
 model TaskEvidence {
-  id         String     @id @default(uuid()) @db.Uuid
-  taskId     String     @map("task_id") @db.Uuid
-  task       ImihigoTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  fileUrl    String     @map("file_url")
-  fileType   FileFormat @map("file_type")
-  metadata   Json       @db.JsonB
-  uploadedBy String?    @map("uploaded_by") @db.Uuid
-  user       User?      @relation(fields: [uploadedBy], references: [id])
+  id           Int        @id @default(autoincrement())
+  fileUrl      String     @map("fileUrl")
+  evidenceType String?    @map("evidenceType")
+  description  String?
+  taskId       Int        @map("taskId")
+  task         ImihigoTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploadedById Int?       @map("uploadedById")
+  uploadedBy   User?      @relation(fields: [uploadedById], references: [id])
   
-  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamp()
-  updatedAt  DateTime   @updatedAt @map("updated_at") @db.Timestamp()
+  createdAt    DateTime   @default(now()) @map("createdAt")
 
-  @@map("task_evidence")
+  @@map("TaskEvidence")
 }
 
 model CommentAudit {
-  id         String      @id @default(uuid()) @db.Uuid
-  taskId     String      @map("task_id") @db.Uuid
-  task       ImihigoTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  userId     String?     @map("user_id") @db.Uuid
-  user       User?       @relation(fields: [userId], references: [id])
-  message    String      @db.Text
-  actionType String?     @map("action_type") @db.VarChar(50)
+  id        Int        @id @default(autoincrement())
+  content   String
+  taskId    Int?       @map("taskId")
+  task      ImihigoTask? @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId  Int?       @map("authorId")
+  author    User?      @relation(fields: [authorId], references: [id])
   
-  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamp()
-  updatedAt  DateTime    @updatedAt @map("updated_at") @db.Timestamp()
+  createdAt DateTime   @default(now()) @map("createdAt")
 
-  @@map("comments_audit")
+  @@map("CommentAudit")
 }

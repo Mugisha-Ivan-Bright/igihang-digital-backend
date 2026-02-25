@@ -1,4 +1,4 @@
-import { Inject, Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Inject, Injectable, UnauthorizedException, ConflictException, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { CreateAuthDto } from './dto/create-auth.dto';
@@ -16,16 +16,15 @@ export class AuthService {
     const {
       email,
       password,
-      fullName,
+      name,
       nationalId,
-      phoneNumber,
       role,
-      locationId: providedLocationId,
-      locationName,
-      locationType
+      adminUnitId,
+      latitude,
+      longitude
     } = createAuthDto;
 
-    // Check if user already exists (email or nationalId)
+    // Check if user already exists
     const existingUser = await this.prisma.user.findFirst({
       where: {
         OR: [{ email }, { nationalId }],
@@ -41,52 +40,35 @@ export class AuthService {
       }
     }
 
-    let finalLocationId = providedLocationId;
-
-    // Handle location creation/lookup if ID not provided
-    if (!finalLocationId && locationName && locationType) {
-      const location = await this.prisma.location.upsert({
-        where: { id: '00000000-0000-0000-0000-000000000000' }, // This is a dummy check because name is not unique in schema
-        // Since name is not unique, we find by name and type first
-        create: {
-          name: locationName,
-          type: locationType,
-        },
-        update: {},
-      });
-
-      // Correct approach for non-unique names:
-      let existingLocation = await this.prisma.location.findFirst({
-        where: { name: locationName, type: locationType }
-      });
-
-      if (!existingLocation) {
-        existingLocation = await this.prisma.location.create({
-          data: { name: locationName, type: locationType }
-        });
-      }
-      finalLocationId = existingLocation.id;
-    }
-
-    // Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create the user
-    const user = await this.prisma.user.create({
-      data: {
-        email,
-        passwordHash: hashedPassword,
-        fullName,
-        nationalId,
-        phoneNumber,
-        role,
-        locationId: finalLocationId,
-      },
-    });
+    // Create user and unique location in a transaction
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email,
+          passwordHash: hashedPassword,
+          name,
+          nationalId,
+          role,
+          adminUnitId,
+        },
+      });
 
-    // Remove password from response
-    const { passwordHash: _, ...userWithoutPassword } = user;
-    return userWithoutPassword;
+      // Maintain requirement: each registered user should have a row in location database
+      // If lat/long provided, use them. Otherwise, default to 0,0 (or handle as required)
+      await tx.location.create({
+        data: {
+          latitude: latitude || 0,
+          longitude: longitude || 0,
+          adminUnitId,
+          userId: user.id
+        },
+      });
+
+      const { passwordHash: _, ...userWithoutPassword } = user;
+      return userWithoutPassword;
+    });
   }
 
   async validateUser(email: string, pass: string): Promise<any> {
@@ -108,7 +90,6 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Payload includes role for RBAC
     const payload = {
       email: user.email,
       sub: user.id,
@@ -120,7 +101,7 @@ export class AuthService {
       user: {
         id: user.id,
         email: user.email,
-        fullName: user.fullName,
+        name: user.name,
         role: user.role
       },
     };
@@ -131,31 +112,44 @@ export class AuthService {
       select: {
         id: true,
         email: true,
-        fullName: true,
+        name: true,
         role: true,
-        status: true,
+        adminUnit: true,
         location: true,
       },
     });
   }
 
-  findOne(id: string) {
-    return this.prisma.user.findUnique({
+  async findOne(id: number) {
+    const user = await this.prisma.user.findUnique({
       where: { id },
       select: {
         id: true,
         email: true,
-        fullName: true,
+        name: true,
         role: true,
-        status: true,
+        adminUnit: true,
         location: true,
       },
     });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+
+    return user;
   }
 
-  remove(id: string) {
-    return this.prisma.user.delete({
-      where: { id },
-    });
+  async remove(id: number) {
+    try {
+      return await this.prisma.user.delete({
+        where: { id },
+      });
+    } catch (error) {
+      if (error.code === 'P2025') {
+        throw new NotFoundException(`User with ID ${id} not found`);
+      }
+      throw error;
+    }
   }
 }

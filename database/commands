@@ -1,71 +1,109 @@
--- 1. EXTENSIONS (For UUID generation)
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- ==========================================================
+-- 1. SETUP ENUMS & HIERARCHY
+-- ==========================================================
+DROP TABLE IF EXISTS "CommentAudit", "TaskEvidence", "Location", "ImihigoTask", "User", "AdminUnit" CASCADE;
+DROP TYPE IF EXISTS "AdminLevel", "UserRole", "TaskStatus" CASCADE;
 
--- 2. ENUM TYPES
-CREATE TYPE location_type AS ENUM ('DISTRICT', 'SECTOR');
-CREATE TYPE user_role AS ENUM ('MAYOR', 'SECTOR_LEADER', 'AUDITOR', 'HIGHER_LEADER');
-CREATE TYPE task_category AS ENUM ('SOCIAL', 'INFRASTRUCTURE', 'ECONOMY');
-CREATE TYPE task_status AS ENUM ('PENDING', 'ONGOING', 'DELAYED', 'UNDER_REVIEW', 'COMPLETED');
-CREATE TYPE file_format AS ENUM ('IMAGE', 'VIDEO', 'PDF');
+CREATE TYPE "AdminLevel" AS ENUM ('PROVINCE', 'DISTRICT', 'SECTOR', 'CELL', 'VILLAGE');
+CREATE TYPE "UserRole" AS ENUM ('SUPER_ADMIN', 'GOVERNOR', 'MAYOR', 'EXECUTIVE_SEC', 'VILLAGE_CHIEF');
+CREATE TYPE "TaskStatus" AS ENUM ('PENDING', 'IN_PROGRESS', 'COMPLETED', 'OVERDUE');
 
--- 3. TABLES
-
--- Locations Hierarchy
-CREATE TABLE locations (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(100) NOT NULL,
-    type location_type NOT NULL,
-    parent_id UUID REFERENCES locations(id) ON DELETE CASCADE
+-- ==========================================================
+-- 2. ADMINISTRATIVE UNITS (The Official Dataset)
+-- ==========================================================
+CREATE TABLE "AdminUnit" (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    level "AdminLevel" NOT NULL,
+    code VARCHAR(20) UNIQUE NOT NULL, -- P-Code (e.g. '1' for Kigali, '11' for Nyarugenge)
+    "parentId" INTEGER REFERENCES "AdminUnit"(id) ON DELETE CASCADE,
+    "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Verified Users
-CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    full_name VARCHAR(255) NOT NULL,
-    national_id VARCHAR(16) UNIQUE NOT NULL,
-    phone_number VARCHAR(15) NOT NULL,
+-- ==========================================================
+-- 3. USERS (Leaders with National IDs)
+-- ==========================================================
+CREATE TABLE "User" (
+    id SERIAL PRIMARY KEY,
+    national_id CHAR(16) UNIQUE NOT NULL, -- Rwandan 16-digit NID
     email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    role user_role NOT NULL,
-    location_id UUID REFERENCES locations(id),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    password VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    role "UserRole" NOT NULL,
+    "adminUnitId" INTEGER REFERENCES "AdminUnit"(id), -- Their "Mandate" location
+    "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Imihigo Tasks
-CREATE TABLE imihigo_tasks (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    sector_id UUID REFERENCES locations(id) NOT NULL,
+-- ==========================================================
+-- 4. IMIHIGO TASKS (Command & Overseeing)
+-- ==========================================================
+CREATE TABLE "ImihigoTask" (
+    id SERIAL PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
-    category task_category NOT NULL,
-    status task_status DEFAULT 'PENDING',
-    completion_pct INTEGER CHECK (completion_pct >= 0 AND completion_pct <= 100) DEFAULT 0,
-    metrics JSONB, -- Stores {"unit": "cows", "target": 50, "current": 10}
-    due_date DATE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    description TEXT,
+    status "TaskStatus" DEFAULT 'PENDING',
+    deadline TIMESTAMP NOT NULL,
+    
+    "issuerId" INTEGER NOT NULL REFERENCES "User"(id),   -- Boss
+    "assigneeId" INTEGER NOT NULL REFERENCES "User"(id), -- Executer
+    "unitId" INTEGER NOT NULL REFERENCES "AdminUnit"(id), -- Where it happens
+    
+    "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Proof of Work (Evidence)
-CREATE TABLE task_evidence (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    task_id UUID REFERENCES imihigo_tasks(id) ON DELETE CASCADE,
-    file_url TEXT NOT NULL,
-    file_type file_format NOT NULL,
-    metadata JSONB NOT NULL, -- Stores {"lat": -1.94, "long": 30.06, "timestamp": "..."}
-    uploaded_by UUID REFERENCES users(id),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+-- ==========================================================
+-- 5. LOCATIONS (Project Specific GPS)
+-- ==========================================================
+CREATE TABLE "Location" (
+    id SERIAL PRIMARY KEY,
+    latitude DECIMAL(10, 8) NOT NULL, 
+    longitude DECIMAL(11, 8) NOT NULL,
+    "adminUnitId" INTEGER REFERENCES "AdminUnit"(id), -- Points to the Sector/Cell from Dataset
+    "taskId" INTEGER REFERENCES "ImihigoTask"(id) ON DELETE CASCADE,
+    "userId" INTEGER REFERENCES "User"(id) ON DELETE CASCADE -- Unique row for each user if needed
 );
 
--- Feedback & Audit Logs
-CREATE TABLE comments_audit (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    task_id UUID REFERENCES imihigo_tasks(id) ON DELETE CASCADE,
-    user_id UUID REFERENCES users(id),
-    message TEXT NOT NULL,
-    action_type VARCHAR(50), -- e.g., 'REJECTED', 'APPROVED', 'COMMENT'
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+-- ==========================================================
+-- 6. MULTIPLE EVIDENCE (The Many-to-One Fix)
+-- ==========================================================
+CREATE TABLE "TaskEvidence" (
+    id SERIAL PRIMARY KEY,
+    "fileUrl" TEXT NOT NULL,         -- URL to S3/Cloudinary storage
+    "evidenceType" VARCHAR(50),      -- e.g. 'PHOTO', 'PDF', 'VIDEO'
+    description TEXT,                -- e.g. "Front view of the health center"
+    "taskId" INTEGER NOT NULL REFERENCES "ImihigoTask"(id) ON DELETE CASCADE,
+    "uploadedById" INTEGER REFERENCES "User"(id),
+    "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 4. INDEXES (For Fast Searching by District/Sector)
-CREATE INDEX idx_locations_parent ON locations(parent_id);
-CREATE INDEX idx_tasks_sector ON imihigo_tasks(sector_id);
-CREATE INDEX idx_users_location ON users(location_id);
+-- ==========================================================
+-- 7. AUDIT COMMENTS
+-- ==========================================================
+CREATE TABLE "CommentAudit" (
+    id SERIAL PRIMARY KEY,
+    content TEXT NOT NULL,
+    "taskId" INTEGER REFERENCES "ImihigoTask"(id) ON DELETE CASCADE,
+    "authorId" INTEGER REFERENCES "User"(id),
+    "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ==========================================================
+-- 8. SEEDING THE PROVINCES & DISTRICTS (NISR 2026 Standards)
+-- ==========================================================
+INSERT INTO "AdminUnit" (name, level, code) VALUES 
+('City of Kigali', 'PROVINCE', '1'),
+('Southern Province', 'PROVINCE', '2'),
+('Western Province', 'PROVINCE', '3'),
+('Northern Province', 'PROVINCE', '4'),
+('Eastern Province', 'PROVINCE', '5');
+
+-- Example: Adding Districts to Kigali (Code '1')
+INSERT INTO "AdminUnit" (name, level, code, "parentId") VALUES 
+('Nyarugenge', 'DISTRICT', '11', 1),
+('Gasabo', 'DISTRICT', '12', 1),
+('Kicukiro', 'DISTRICT', '13', 1);
+
+-- Example: Adding a Sector to Nyarugenge (Code '11')
+INSERT INTO "AdminUnit" (name, level, code, "parentId") VALUES 
+('Nyarugenge Sector', 'SECTOR', '1101', (SELECT id FROM "AdminUnit" WHERE code = '11'));

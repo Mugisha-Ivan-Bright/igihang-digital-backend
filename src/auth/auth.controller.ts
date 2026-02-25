@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, HttpCode, HttpStatus, UseGuards, Patch } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { CreateAuthDto } from './dto/create-auth.dto';
 import { LoginAuthDto } from './dto/login-auth.dto';
@@ -24,7 +24,7 @@ export class AuthController {
 
   @Get('users')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.MAYOR, UserRole.HIGHER_LEADER) // Only Mayor or Higher Leader can see all users
+  @Roles(UserRole.SUPER_ADMIN, UserRole.GOVERNOR)
   findAll() {
     return this.authService.findAll();
   }
@@ -32,13 +32,14 @@ export class AuthController {
   @Get('users/:id')
   @UseGuards(JwtAuthGuard)
   findOne(@Param('id') id: string) {
-    return this.authService.findOne(id);
+    return this.authService.findOne(+id);
   }
 
   @Delete('users/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.HIGHER_LEADER)
+  @Roles(UserRole.SUPER_ADMIN)
   remove(@Param('id') id: string) {
-    return this.authService.remove(id);
+    return this.authService.remove(+id);
   }
+
 }

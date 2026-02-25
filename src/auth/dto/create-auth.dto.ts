@@ -1,5 +1,5 @@
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, Length, MinLength } from 'class-validator';
-import { UserRole, LocationType } from '@prisma/client';
+import { IsEmail, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, Length, MinLength } from 'class-validator';
+import { UserRole } from '@prisma/client';
 
 export class CreateAuthDto {
     @IsEmail({}, { message: 'Invalid email address' })
@@ -11,30 +11,26 @@ export class CreateAuthDto {
     password: string;
 
     @IsString()
-    @IsNotEmpty({ message: 'Full name is required' })
-    fullName: string;
+    @IsNotEmpty({ message: 'Name is required' })
+    name: string;
 
     @IsString()
     @IsNotEmpty({ message: 'National ID is required' })
     @Length(16, 16, { message: 'National ID must be exactly 16 characters' })
     nationalId: string;
 
-    @IsString()
-    @IsNotEmpty({ message: 'Phone number is required' })
-    phoneNumber: string;
-
     @IsEnum(UserRole, { message: 'Invalid user role' })
     role: UserRole;
 
     @IsOptional()
-    @IsUUID('4', { message: 'Invalid location ID format' })
-    locationId?: string;
+    @IsNumber()
+    adminUnitId?: number;
 
     @IsOptional()
-    @IsString()
-    locationName?: string;
+    @IsNumber()
+    latitude?: number;
 
     @IsOptional()
-    @IsEnum(LocationType, { message: 'Invalid location type' })
-    locationType?: LocationType;
+    @IsNumber()
+    longitude?: number;
 }
