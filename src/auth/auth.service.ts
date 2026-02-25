@@ -1,7 +1,7 @@
 import { Inject, Injectable, UnauthorizedException, ConflictException, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { UserRole, ActionType } from '@prisma/client';
+import { UserRole, ActionType, NotificationType, User, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAuthDto } from './dto/create-auth.dto';
 import { UpdateAuthDto } from './dto/update-auth.dto';
@@ -10,6 +10,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { MailService } from '../mail/mail.service';
 import { SystemLogService } from '../system-log/system-log.service';
+import { NotificationService } from '../notifications/notification.service';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -26,6 +27,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
     private readonly systemLogService: SystemLogService,
+    private readonly notificationService: NotificationService,
   ) { }
 
   async register(dto: CreateAuthDto, actorId?: number) {
@@ -75,11 +77,11 @@ export class AuthService {
         nationalId,
         adminUnitId,
         location: latitude && longitude ? {
-          create: {
-            latitude,
-            longitude,
+          create: [{
+            latitude: new Prisma.Decimal(latitude),
+            longitude: new Prisma.Decimal(longitude),
             adminUnitId,
-          },
+          }],
         } : undefined,
       },
     });
@@ -134,17 +136,14 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const payload = {
-      email: user.email,
-      sub: user.id,
-      role: user.role
-    };
+    const tokens = await this.getTokens(user.id, user.email, user.role);
+    await this.updateRefreshToken(user.id, tokens.refresh_token);
 
     // Log login
     await this.systemLogService.log(user.id, ActionType.LOGIN, 'User', user.id);
 
     return {
-      access_token: this.jwtService.sign(payload),
+      ...tokens,
       user: {
         id: user.id,
         email: user.email,
@@ -154,32 +153,79 @@ export class AuthService {
     };
   }
 
+  async getTokens(userId: number, email: string, role: UserRole) {
+    const payload = {
+      sub: userId,
+      email,
+      role,
+    };
+
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync(payload, {
+        secret: process.env.JWT_SECRET || 'SECRET_KEY',
+        expiresIn: '15m',
+      }),
+      this.jwtService.signAsync(payload, {
+        secret: process.env.JWT_REFRESH_SECRET || 'REFRESH_SECRET_KEY',
+        expiresIn: '7d',
+      }),
+    ]);
+
+    return {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    };
+  }
+
+  async updateRefreshToken(userId: number, refreshToken: string) {
+    const hashedToken = await bcrypt.hash(refreshToken, 10);
+    const expires = new Date();
+    expires.setDate(expires.getDate() + 7);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        refreshToken: hashedToken,
+        refreshTokenExpires: expires,
+      },
+    });
+  }
+
+  async refreshTokens(userId: number, refreshToken: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user || !user.refreshToken || !user.refreshTokenExpires) {
+      throw new ForbiddenException('Access Denied');
+    }
+
+    if (new Date() > user.refreshTokenExpires) {
+      throw new ForbiddenException('Refresh token expired');
+    }
+
+    const refreshTokenMatches = await bcrypt.compare(refreshToken, user.refreshToken);
+    if (!refreshTokenMatches) {
+      throw new ForbiddenException('Access Denied');
+    }
+
+    const tokens = await this.getTokens(user.id, user.email, user.role);
+    await this.updateRefreshToken(user.id, tokens.refresh_token);
+    return tokens;
+  }
+
   async findAll() {
     return this.prisma.user.findMany({
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        adminUnitId: true,
-        adminUnit: true,
-        location: true,
-      },
+      omit: { passwordHash: true, refreshToken: true, refreshTokenExpires: true },
+      include: { adminUnit: true, location: true },
     });
   }
 
   async findOne(id: number) {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        adminUnitId: true,
-        adminUnit: true,
-        location: true,
-      },
+      omit: { passwordHash: true, refreshToken: true, refreshTokenExpires: true },
+      include: { adminUnit: true, location: true },
     });
 
     if (!user) {
@@ -236,11 +282,20 @@ export class AuthService {
       if (existingLocation) {
         await this.prisma.location.update({
           where: { id: existingLocation.id },
-          data: { latitude, longitude, adminUnitId: newAdminUnitId },
+          data: {
+            latitude: new Prisma.Decimal(latitude),
+            longitude: new Prisma.Decimal(longitude),
+            adminUnitId: newAdminUnitId
+          },
         });
       } else {
         await this.prisma.location.create({
-          data: { latitude, longitude, adminUnitId: newAdminUnitId, userId: id },
+          data: {
+            latitude: new Prisma.Decimal(latitude),
+            longitude: new Prisma.Decimal(longitude),
+            adminUnitId: newAdminUnitId,
+            userId: id,
+          },
         });
       }
     }
@@ -262,7 +317,7 @@ export class AuthService {
 
     const token = crypto.randomBytes(32).toString('hex');
     const expires = new Date();
-    expires.setHours(expires.getHours() + 1);
+    expires.setMinutes(expires.getMinutes() + 1);
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -303,7 +358,27 @@ export class AuthService {
 
     await this.systemLogService.log(user.id, ActionType.UPDATE, 'User', user.id, null, { action: 'reset_password' });
 
+    // Notify user about password change
+    await this.notificationService.create({
+      recipientId: user.id,
+      type: NotificationType.SECURITY_ALERT,
+      title: 'Password Changed Successfully',
+      message: 'Your account password was recently reset. If you did not perform this action, please contact support immediately.',
+    });
+
     return { message: 'Password has been reset successfully' };
+  }
+
+  async logout(userId: number) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        refreshToken: null,
+        refreshTokenExpires: null,
+      },
+    });
+    await this.systemLogService.log(userId, ActionType.LOGOUT, 'User', userId);
+    return { message: 'Logged out successfully' };
   }
 
   async remove(id: number, actorId: number) {

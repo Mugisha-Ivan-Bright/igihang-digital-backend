@@ -39,6 +39,7 @@ enum ActionType {
   LOGIN
   APPROVE
   REJECT
+  LOGOUT
 }
 
 enum NotificationType {
@@ -47,6 +48,7 @@ enum NotificationType {
   COMMENT_ADDED
   STATUS_CHANGED
   SYSTEM_ALERT
+  SECURITY_ALERT
 }
 
 model AdminUnit {
@@ -76,6 +78,9 @@ model User {
   role         UserRole
   adminUnitId  Int?       @map("adminUnitId")
   adminUnit    AdminUnit? @relation(fields: [adminUnitId], references: [id])
+  
+  refreshToken      String?   @map("refresh_token")
+  refreshTokenExpires DateTime? @map("refresh_token_expires")
   
   issuedTasks   ImihigoTask[] @relation("IssuerTasks")
   assignedTasks ImihigoTask[] @relation("AssigneeTasks")

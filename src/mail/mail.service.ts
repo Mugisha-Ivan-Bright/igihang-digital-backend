@@ -8,9 +8,11 @@ export class MailService {
     private readonly logger = new Logger(MailService.name);
 
     constructor(@Inject('PRISMA_TOKEN') private readonly prisma: PrismaService) {
+        this.logger.log(`Initializing MailService with HOST: ${process.env.MAIL_HOST}, USER: ${process.env.MAIL_USER ? 'Present' : 'Missing'}`);
         this.transporter = nodemailer.createTransport({
             host: (process.env.MAIL_HOST as string) || 'smtp.mailtrap.io',
             port: parseInt(process.env.MAIL_PORT as string) || 2525,
+            secure: process.env.MAIL_PORT === '465', // true for 465, false for other ports
             auth: {
                 user: process.env.MAIL_USER,
                 pass: process.env.MAIL_PASS,

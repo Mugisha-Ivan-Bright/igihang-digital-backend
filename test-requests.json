@@ -13,6 +13,20 @@
                     "adminUnitId": 1
                 }
             },
+            "governor": {
+                "url": "{{host}}/auth/register",
+                "method": "POST",
+                "body": {
+                    "email": "governor@gov.rw",
+                    "password": "Password123!",
+                    "name": "Governor Paul",
+                    "nationalId": "1111222233335555",
+                    "role": "GOVERNOR",
+                    "adminUnitId": 1,
+                    "latitude": -1.9441,
+                    "longitude": 30.0619
+                }
+            },
             "mayor": {
                 "url": "{{host}}/auth/register",
                 "method": "POST",
@@ -36,9 +50,46 @@
                 "password": "Password123!"
             }
         },
+        "logout": {
+            "url": "{{host}}/auth/logout",
+            "method": "POST",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "refresh_token": {
+            "url": "{{host}}/auth/refresh",
+            "method": "POST",
+            "note": "Sends the refresh_token cookie automatically if using a client that supports cookies."
+        },
         "get_all_users": {
             "url": "{{host}}/auth/users",
             "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "get_user_by_id": {
+            "url": "{{host}}/auth/users/1",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "update_user": {
+            "url": "{{host}}/auth/users/1",
+            "method": "PATCH",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            },
+            "body": {
+                "name": "Updated Name",
+                "adminUnitId": 2
+            }
+        },
+        "delete_user": {
+            "url": "{{host}}/auth/users/2",
+            "method": "DELETE",
             "headers": {
                 "Authorization": "Bearer {{jwt_token}}"
             }
@@ -59,6 +110,36 @@
             }
         }
     },
+    "notifications": {
+        "my_notifications": {
+            "url": "{{host}}/notifications",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "all_notifications": {
+            "url": "{{host}}/notifications/all",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "mark_as_read": {
+            "url": "{{host}}/notifications/1/read",
+            "method": "PATCH",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "mark_all_read": {
+            "url": "{{host}}/notifications/read-all",
+            "method": "PATCH",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        }
+    },
     "dashboard": {
         "health": {
             "url": "{{host}}/dashboard/health",
@@ -74,7 +155,7 @@
                 "Authorization": "Bearer {{jwt_token}}"
             }
         },
-        "active_users": {
+        "active_users": {   
             "url": "{{host}}/dashboard/active-users",
             "method": "GET",
             "headers": {
@@ -142,12 +223,19 @@
             "headers": {
                 "Authorization": "Bearer {{jwt_token}}"
             }
-        },
-        "notifications": {
-            "url": "{{host}}/notifications/all",
-            "method": "GET",
+        }
+    },
+    "mail": {
+        "send": {
+            "url": "{{host}}/mail/send",
+            "method": "POST",
             "headers": {
                 "Authorization": "Bearer {{jwt_token}}"
+            },
+            "body": {
+                "to": "recipient@example.com",
+                "subject": "Test Email",
+                "body": "Hello from Igihango!"
             }
         }
     },
@@ -162,6 +250,6 @@
     },
     "variables": {
         "host": "http://localhost:3001",
-        "notes": "Replace {{jwt_token}} with a Super Admin token."
+        "notes": "Replace {{jwt_token}} with a token from the login response. Cookies (access_token, refresh_token) are set automatically on login."
     }
 }

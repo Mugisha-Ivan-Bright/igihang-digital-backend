@@ -6,9 +6,18 @@ import { Injectable } from '@nestjs/common';
 export class JwtStrategy extends PassportStrategy(Strategy) {
     constructor() {
         super({
-            jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+            jwtFromRequest: ExtractJwt.fromExtractors([
+                ExtractJwt.fromAuthHeaderAsBearerToken(),
+                (req) => {
+                    let token = null;
+                    if (req && req.cookies) {
+                        token = req.cookies['access_token'];
+                    }
+                    return token;
+                },
+            ]),
             ignoreExpiration: false,
-            secretOrKey: 'SECRET_KEY', // Must match AuthModule
+            secretOrKey: process.env.JWT_SECRET || 'SECRET_KEY',
         });
     }
 
