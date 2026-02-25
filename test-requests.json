@@ -26,55 +26,142 @@
                     "latitude": -1.9441,
                     "longitude": 30.0619
                 }
-            },
-            "executive_sec": {
-                "url": "{{host}}/auth/register",
-                "method": "POST",
-                "body": {
-                    "email": "exec.test@gov.rw",
-                    "password": "Password123!",
-                    "name": "Exec Sec Paul",
-                    "nationalId": "1234567890654321",
-                    "role": "EXECUTIVE_SEC",
-                    "adminUnitId": 9
-                }
             }
         },
         "login": {
             "url": "{{host}}/auth/login",
             "method": "POST",
             "body": {
-                "email": "mayor.test@gov.rw",
+                "email": "admin@gov.rw",
                 "password": "Password123!"
             }
         },
         "get_all_users": {
-            "description": "Requires SUPER_ADMIN or GOVERNOR role",
             "url": "{{host}}/auth/users",
             "method": "GET",
             "headers": {
                 "Authorization": "Bearer {{jwt_token}}"
             }
         },
-        "get_user_by_id": {
-            "description": "Requires valid JWT token",
-            "url": "{{host}}/auth/users/{{user_id}}",
+        "forgot_password": {
+            "url": "{{host}}/auth/forgot-password",
+            "method": "POST",
+            "body": {
+                "email": "admin@gov.rw"
+            }
+        },
+        "reset_password": {
+            "url": "{{host}}/auth/reset-password",
+            "method": "POST",
+            "body": {
+                "token": "ACTUAL_TOKEN_FROM_EMAIL",
+                "newPassword": "NewSecurePassword123!"
+            }
+        }
+    },
+    "dashboard": {
+        "health": {
+            "url": "{{host}}/dashboard/health",
             "method": "GET",
             "headers": {
                 "Authorization": "Bearer {{jwt_token}}"
             }
         },
-        "delete_user": {
-            "description": "Requires SUPER_ADMIN role",
-            "url": "{{host}}/auth/users/{{user_id}}",
-            "method": "DELETE",     
+        "stats": {
+            "url": "{{host}}/dashboard/stats",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "active_users": {
+            "url": "{{host}}/dashboard/active-users",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        }
+    },
+    "admin_units": {
+        "all": {
+            "url": "{{host}}/admin-units",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "by_level": {
+            "url": "{{host}}/admin-units?level=DISTRICT",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "unallocated": {
+            "url": "{{host}}/admin-units/unallocated",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        }
+    },
+    "task_mgmt": {
+        "all_tasks": {
+            "url": "{{host}}/mgmt/tasks",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "all_evidence": {
+            "url": "{{host}}/mgmt/tasks/evidence",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "all_comments": {
+            "url": "{{host}}/mgmt/tasks/comments",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        }
+    },
+    "logs": {
+        "system": {
+            "url": "{{host}}/logs",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "emails": {
+            "url": "{{host}}/mail/logs",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "notifications": {
+            "url": "{{host}}/notifications/all",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        }
+    },
+    "geospatial": {
+        "all_locations": {
+            "url": "{{host}}/mgmt/locations",
+            "method": "GET",
             "headers": {
                 "Authorization": "Bearer {{jwt_token}}"
             }
         }
     },
     "variables": {
-        "host": "http://localhost:3001",    
-        "notes": "Note: user_id is now an INTEGER. Replace {{jwt_token}} and {{user_id}} with actual values."
+        "host": "http://localhost:3001",
+        "notes": "Replace {{jwt_token}} with a Super Admin token."
     }
 }

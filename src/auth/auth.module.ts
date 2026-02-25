@@ -5,13 +5,13 @@ import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './jwt.strategy';
 import { PrismaModule } from '../prisma/prisma.module';
-// ❌ DO NOT import PrismaService here
-// ❌ DO NOT put PrismaService in providers here
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
     PrismaModule,
     PassportModule,
+    MailModule,
     JwtModule.register({
       secret: 'SECRET_KEY', // In production, use environment variables
       signOptions: { expiresIn: '1h' },

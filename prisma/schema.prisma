@@ -32,6 +32,23 @@ enum TaskStatus {
   OVERDUE
 }
 
+enum ActionType {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  APPROVE
+  REJECT
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  EVIDENCE_UPLOADED
+  COMMENT_ADDED
+  STATUS_CHANGED
+  SYSTEM_ALERT
+}
+
 model AdminUnit {
   id        Int        @id @default(autoincrement())
   name      String
@@ -66,6 +83,13 @@ model User {
   comments      CommentAudit[]
   location      Location[]
 
+  systemLogs    SystemLog[]
+  notificationsSent Notification[] @relation("SenderNotifications")
+  notificationsReceived Notification[] @relation("RecipientNotifications")
+
+  resetToken        String?   @map("reset_token")
+  resetTokenExpires DateTime? @map("reset_token_expires")
+
   createdAt    DateTime    @default(now()) @map("createdAt")
 
   @@map("User")
@@ -88,6 +112,7 @@ model ImihigoTask {
   locations   Location[]
   evidence    TaskEvidence[]
   comments    CommentAudit[]
+  emailLogs   EmailLog[]
 
   createdAt   DateTime   @default(now()) @map("createdAt")
   updatedAt   DateTime   @default(now()) @updatedAt @map("updatedAt")
@@ -135,4 +160,56 @@ model CommentAudit {
   createdAt DateTime   @default(now()) @map("createdAt")
 
   @@map("CommentAudit")
+}
+
+model SystemLog {
+  id        Int        @id @default(autoincrement())
+  userId    Int        @map("userId")
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    ActionType
+  tableName String     @db.VarChar(50)
+  recordId  Int
+  oldValue  Json?
+  newValue  Json?
+  ipAddress String?    @db.VarChar(45)
+  createdAt DateTime   @default(now()) @map("createdAt")
+
+  @@index([userId])
+  @@index([tableName, recordId])
+  @@map("SystemLog")
+}
+
+model EmailLog {
+  id             Int          @id @default(autoincrement())
+  recipientEmail String       @db.VarChar(255)
+  subject        String       @db.Text
+  templateName   String?      @db.VarChar(100)
+  status         String?      @db.VarChar(20)
+  errorMessage   String?      @db.Text
+  sentAt         DateTime     @default(now()) @map("sentAt")
+  taskId         Int?         @map("taskId")
+  task           ImihigoTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@map("EmailLog")
+}
+
+model Notification {
+  id          Int              @id @default(autoincrement())
+  recipientId Int              @map("recipientId")
+  recipient   User             @relation("RecipientNotifications", fields: [recipientId], references: [id], onDelete: Cascade)
+  senderId    Int?             @map("senderId")
+  sender      User?            @relation("SenderNotifications", fields: [senderId], references: [id], onDelete: SetNull)
+  type        NotificationType
+  title       String           @db.VarChar(255)
+  message     String           @db.Text
+  icon        String?          @db.VarChar(50)
+  linkId      Int?
+  linkTable   String?          @db.VarChar(50)
+  isRead      Boolean          @default(false)
+  readAt      DateTime?
+  createdAt   DateTime         @default(now()) @map("createdAt")
+
+  @@index([recipientId])
+  @@index([senderId])
+  @@map("Notification")
 }

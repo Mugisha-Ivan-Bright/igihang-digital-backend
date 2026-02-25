@@ -1,12 +1,14 @@
 -- ==========================================================
 -- 1. SETUP ENUMS & HIERARCHY
 -- ==========================================================
-DROP TABLE IF EXISTS "CommentAudit", "TaskEvidence", "Location", "ImihigoTask", "User", "AdminUnit" CASCADE;
-DROP TYPE IF EXISTS "AdminLevel", "UserRole", "TaskStatus" CASCADE;
+DROP TABLE IF EXISTS "Notification", "EmailLog", "SystemLog", "CommentAudit", "TaskEvidence", "Location", "ImihigoTask", "User", "AdminUnit" CASCADE;
+DROP TYPE IF EXISTS "NotificationType", "ActionType", "AdminLevel", "UserRole", "TaskStatus" CASCADE;
 
 CREATE TYPE "AdminLevel" AS ENUM ('PROVINCE', 'DISTRICT', 'SECTOR', 'CELL', 'VILLAGE');
 CREATE TYPE "UserRole" AS ENUM ('SUPER_ADMIN', 'GOVERNOR', 'MAYOR', 'EXECUTIVE_SEC', 'VILLAGE_CHIEF');
 CREATE TYPE "TaskStatus" AS ENUM ('PENDING', 'IN_PROGRESS', 'COMPLETED', 'OVERDUE');
+CREATE TYPE "ActionType" AS ENUM ('CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'APPROVE', 'REJECT');
+CREATE TYPE "NotificationType" AS ENUM ('TASK_ASSIGNED', 'EVIDENCE_UPLOADED', 'COMMENT_ADDED', 'STATUS_CHANGED', 'SYSTEM_ALERT');
 
 -- ==========================================================
 -- 2. ADMINISTRATIVE UNITS (The Official Dataset)
@@ -15,7 +17,7 @@ CREATE TABLE "AdminUnit" (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     level "AdminLevel" NOT NULL,
-    code VARCHAR(20) UNIQUE NOT NULL, -- P-Code (e.g. '1' for Kigali, '11' for Nyarugenge)
+    code VARCHAR(20) UNIQUE NOT NULL, 
     "parentId" INTEGER REFERENCES "AdminUnit"(id) ON DELETE CASCADE,
     "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -25,12 +27,14 @@ CREATE TABLE "AdminUnit" (
 -- ==========================================================
 CREATE TABLE "User" (
     id SERIAL PRIMARY KEY,
-    national_id CHAR(16) UNIQUE NOT NULL, -- Rwandan 16-digit NID
+    national_id CHAR(16) UNIQUE NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     name VARCHAR(255) NOT NULL,
     role "UserRole" NOT NULL,
-    "adminUnitId" INTEGER REFERENCES "AdminUnit"(id), -- Their "Mandate" location
+    "adminUnitId" INTEGER REFERENCES "AdminUnit"(id),
+    "resetToken" VARCHAR(255),
+    "resetTokenExpires" TIMESTAMP,
     "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -43,11 +47,9 @@ CREATE TABLE "ImihigoTask" (
     description TEXT,
     status "TaskStatus" DEFAULT 'PENDING',
     deadline TIMESTAMP NOT NULL,
-    
-    "issuerId" INTEGER NOT NULL REFERENCES "User"(id),   -- Boss
-    "assigneeId" INTEGER NOT NULL REFERENCES "User"(id), -- Executer
-    "unitId" INTEGER NOT NULL REFERENCES "AdminUnit"(id), -- Where it happens
-    
+    "issuerId" INTEGER NOT NULL REFERENCES "User"(id),
+    "assigneeId" INTEGER NOT NULL REFERENCES "User"(id),
+    "unitId" INTEGER NOT NULL REFERENCES "AdminUnit"(id),
     "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -59,19 +61,19 @@ CREATE TABLE "Location" (
     id SERIAL PRIMARY KEY,
     latitude DECIMAL(10, 8) NOT NULL, 
     longitude DECIMAL(11, 8) NOT NULL,
-    "adminUnitId" INTEGER REFERENCES "AdminUnit"(id), -- Points to the Sector/Cell from Dataset
+    "adminUnitId" INTEGER REFERENCES "AdminUnit"(id),
     "taskId" INTEGER REFERENCES "ImihigoTask"(id) ON DELETE CASCADE,
-    "userId" INTEGER REFERENCES "User"(id) ON DELETE CASCADE -- Unique row for each user if needed
+    "userId" INTEGER REFERENCES "User"(id) ON DELETE CASCADE
 );
 
 -- ==========================================================
--- 6. MULTIPLE EVIDENCE (The Many-to-One Fix)
+-- 6. MULTIPLE EVIDENCE
 -- ==========================================================
 CREATE TABLE "TaskEvidence" (
     id SERIAL PRIMARY KEY,
-    "fileUrl" TEXT NOT NULL,         -- URL to S3/Cloudinary storage
-    "evidenceType" VARCHAR(50),      -- e.g. 'PHOTO', 'PDF', 'VIDEO'
-    description TEXT,                -- e.g. "Front view of the health center"
+    "fileUrl" TEXT NOT NULL,
+    "evidenceType" VARCHAR(50),
+    description TEXT,
     "taskId" INTEGER NOT NULL REFERENCES "ImihigoTask"(id) ON DELETE CASCADE,
     "uploadedById" INTEGER REFERENCES "User"(id),
     "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -89,7 +91,60 @@ CREATE TABLE "CommentAudit" (
 );
 
 -- ==========================================================
--- 8. SEEDING THE PROVINCES & DISTRICTS (NISR 2026 Standards)
+-- 8. SYSTEM LOGS (Audit Trail)
+-- ==========================================================
+CREATE TABLE "SystemLog" (
+    id SERIAL PRIMARY KEY,
+    "userId" INTEGER NOT NULL REFERENCES "User"(id),
+    action "ActionType" NOT NULL,
+    "tableName" VARCHAR(50) NOT NULL,
+    "recordId" INTEGER NOT NULL,
+    "oldValue" JSONB,
+    "newValue" JSONB,
+    "ipAddress" VARCHAR(45),
+    "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_log_user ON "SystemLog"("userId");
+CREATE INDEX idx_log_record ON "SystemLog"("tableName", "recordId");
+
+-- ==========================================================
+-- 9. EMAIL LOGS
+-- ==========================================================
+CREATE TABLE "EmailLog" (
+    id SERIAL PRIMARY KEY,
+    "recipientEmail" VARCHAR(255) NOT NULL,
+    subject TEXT NOT NULL,
+    "templateName" VARCHAR(100),
+    status VARCHAR(20),
+    "errorMessage" TEXT,
+    "sentAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    "taskId" INTEGER REFERENCES "ImihigoTask"(id) ON DELETE SET NULL
+);
+
+-- ==========================================================
+-- 10. NOTIFICATIONS
+-- ==========================================================
+CREATE TABLE "Notification" (
+    id SERIAL PRIMARY KEY,
+    "recipientId" INTEGER NOT NULL REFERENCES "User"(id) ON DELETE CASCADE,
+    "senderId"    INTEGER REFERENCES "User"(id) ON DELETE SET NULL,
+    type "NotificationType" NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    "icon" VARCHAR(50),
+    "linkId" INTEGER,
+    "linkTable" VARCHAR(50),
+    "isRead" BOOLEAN DEFAULT false,
+    "readAt" TIMESTAMP,
+    "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_notif_recipient ON "Notification"("recipientId");
+CREATE INDEX idx_notif_sender ON "Notification"("senderId");
+
+-- ==========================================================
+-- 11. SEEDING INITIAL DATA
 -- ==========================================================
 INSERT INTO "AdminUnit" (name, level, code) VALUES 
 ('City of Kigali', 'PROVINCE', '1'),
@@ -98,12 +153,10 @@ INSERT INTO "AdminUnit" (name, level, code) VALUES
 ('Northern Province', 'PROVINCE', '4'),
 ('Eastern Province', 'PROVINCE', '5');
 
--- Example: Adding Districts to Kigali (Code '1')
 INSERT INTO "AdminUnit" (name, level, code, "parentId") VALUES 
 ('Nyarugenge', 'DISTRICT', '11', 1),
 ('Gasabo', 'DISTRICT', '12', 1),
 ('Kicukiro', 'DISTRICT', '13', 1);
 
--- Example: Adding a Sector to Nyarugenge (Code '11')
 INSERT INTO "AdminUnit" (name, level, code, "parentId") VALUES 
 ('Nyarugenge Sector', 'SECTOR', '1101', (SELECT id FROM "AdminUnit" WHERE code = '11'));
