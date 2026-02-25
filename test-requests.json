@@ -155,7 +155,7 @@
                 "Authorization": "Bearer {{jwt_token}}"
             }
         },
-        "active_users": {   
+        "active_users": {
             "url": "{{host}}/dashboard/active-users",
             "method": "GET",
             "headers": {
@@ -246,6 +246,119 @@
             "headers": {
                 "Authorization": "Bearer {{jwt_token}}"
             }
+        }
+    },
+    "leader": {
+        "note": "All /leader routes require a logged-in leader (GOVERNOR, MAYOR, EXECUTIVE_SEC, or VILLAGE_CHIEF).",
+        "subordinates": {
+            "url": "{{host}}/leader/subordinates",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "superiors": {
+            "url": "{{host}}/leader/superiors",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "my_tasks": {
+            "url": "{{host}}/leader/tasks/mine",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "unit_tasks": {
+            "url": "{{host}}/leader/tasks/unit",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "unit_tasks_by_status": {
+            "url": "{{host}}/leader/tasks/unit?status=IN_PROGRESS",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "assign_task": {
+            "url": "{{host}}/leader/tasks",
+            "method": "POST",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            },
+            "body": {
+                "title": "Construct community hall",
+                "description": "Build a new community hall in Sector X",
+                "assigneeId": 2,
+                "unitId": 3,
+                "deadline": "2026-06-30T00:00:00Z"
+            }
+        },
+        "update_task_status": {
+            "url": "{{host}}/leader/tasks/1/status",
+            "method": "PATCH",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            },
+            "body": {
+                "status": "IN_PROGRESS"
+            }
+        },
+        "add_evidence": {
+            "url": "{{host}}/leader/tasks/1/evidence",
+            "method": "POST",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            },
+            "body": {
+                "fileUrl": "https://storage.example.com/evidence/photo1.jpg",
+                "evidenceType": "PHOTO",
+                "description": "Foundation laid — 40% complete"
+            }
+        },
+        "get_evidence": {
+            "url": "{{host}}/leader/tasks/1/evidence",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "add_comment": {
+            "url": "{{host}}/leader/tasks/1/comments",
+            "method": "POST",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            },
+            "body": {
+                "content": "Please upload updated site photos by Friday."
+            }
+        },
+        "get_comments": {
+            "url": "{{host}}/leader/tasks/1/comments",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "my_progress": {
+            "url": "{{host}}/leader/progress",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            }
+        },
+        "progress_cross_scope": {
+            "url": "{{host}}/leader/progress/1",
+            "method": "GET",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            },
+            "note": "Replace /1 with any adminUnitId to view progress for a different unit."
         }
     },
     "variables": {

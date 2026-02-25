@@ -10,6 +10,7 @@ import { AdminUnitModule } from './admin-unit/admin-unit.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { TaskMgmtModule } from './tasks/task-mgmt.module';
 import { LocationMgmtModule } from './location/location-mgmt.module';
+import { LeaderModule } from './leader/leader.module';
 
 @Module({
   imports: [
@@ -21,7 +22,8 @@ import { LocationMgmtModule } from './location/location-mgmt.module';
     AdminUnitModule,
     DashboardModule,
     TaskMgmtModule,
-    LocationMgmtModule
+    LocationMgmtModule,
+    LeaderModule,
   ],
   controllers: [AppController],
   providers: [AppService],
