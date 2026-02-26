@@ -9,8 +9,11 @@ import {
     ParseIntPipe,
     UseGuards,
     Request,
+    UseInterceptors,
+    UploadedFile,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiCookieAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiCookieAuth, ApiParam, ApiQuery, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { LeaderService } from './leader.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AssignTaskDto } from './dto/assign-task.dto';
@@ -18,6 +21,7 @@ import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
 import { AddEvidenceDto } from './dto/add-evidence.dto';
 import { AddCommentDto } from './dto/add-comment.dto';
 import { TaskStatus } from '@prisma/client';
+import { multerConfig } from '../common/config/multer.config';
 
 @ApiTags('Leader Operations')
 @Controller('leader')
@@ -83,7 +87,7 @@ export class LeaderController {
     }
 
     @Post('tasks/:id/evidence')
-    @ApiOperation({ summary: 'Add evidence to task' })
+    @ApiOperation({ summary: 'Add evidence to task (URL)' })
     @ApiParam({ name: 'id', description: 'Task ID' })
     @ApiResponse({ status: 201, description: 'Evidence added' })
     addEvidence(
@@ -92,6 +96,40 @@ export class LeaderController {
         @Request() req,
     ) {
         return this.leaderService.addEvidence(taskId, dto, req.user.userId);
+    }
+
+    @Post('tasks/:id/evidence/upload')
+    @UseInterceptors(FileInterceptor('file', multerConfig))
+    @ApiOperation({ summary: 'Upload evidence file to task' })
+    @ApiConsumes('multipart/form-data')
+    @ApiParam({ name: 'id', description: 'Task ID' })
+    @ApiBody({
+        schema: {
+            type: 'object',
+            properties: {
+                file: {
+                    type: 'string',
+                    format: 'binary',
+                    description: 'Evidence file (image, video, or document)',
+                },
+                description: {
+                    type: 'string',
+                    description: 'Evidence description',
+                    example: 'Foundation completed - 40% progress',
+                },
+            },
+            required: ['file'],
+        },
+    })
+    @ApiResponse({ status: 201, description: 'File uploaded and evidence added' })
+    @ApiResponse({ status: 400, description: 'Invalid file type or size' })
+    async uploadEvidence(
+        @Param('id', ParseIntPipe) taskId: number,
+        @UploadedFile() file: Express.Multer.File,
+        @Body('description') description: string,
+        @Request() req,
+    ) {
+        return this.leaderService.uploadEvidence(taskId, file, description, req.user.userId);
     }
 
     @Get('tasks/:id/evidence')

@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { MailModule } from './mail/mail.module';
 import { SystemLogModule } from './system-log/system-log.module';
 import { NotificationModule } from './notifications/notification.module';
@@ -14,8 +16,10 @@ import { LeaderModule } from './leader/leader.module';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     AuthModule,
     PrismaModule,
+    CloudinaryModule,
     MailModule,
     SystemLogModule,
     NotificationModule,

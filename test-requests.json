@@ -209,6 +209,29 @@
             }
         }
     },
+    "task_scheduler": {
+        "note": "Task scheduler endpoints for automated deadline monitoring. Requires SUPER_ADMIN role.",
+        "check_overdue": {
+            "url": "{{host}}/tasks/scheduler/check-overdue",
+            "method": "POST",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            },
+            "description": "Manually trigger overdue tasks check. Updates task status to OVERDUE if deadline has passed and sends notifications."
+        },
+        "send_reminders": {
+            "url": "{{host}}/tasks/scheduler/send-reminders",
+            "method": "POST",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}"
+            },
+            "description": "Manually trigger deadline reminders. Sends notifications for tasks due within 3 days."
+        },
+        "automated_schedules": {
+            "overdue_check": "Runs automatically every day at midnight (00:00)",
+            "deadline_reminders": "Runs automatically every day at 9:00 AM"
+        }
+    },
     "logs": {
         "system": {
             "url": "{{host}}/logs",
@@ -319,7 +342,18 @@
                 "fileUrl": "https://storage.example.com/evidence/photo1.jpg",
                 "evidenceType": "PHOTO",
                 "description": "Foundation laid — 40% complete"
-            }
+            },
+            "note": "Use this endpoint if you already have a Cloudinary URL"
+        },
+        "upload_evidence": {
+            "url": "{{host}}/leader/tasks/1/evidence/upload",
+            "method": "POST",
+            "headers": {
+                "Authorization": "Bearer {{jwt_token}}",
+                "Content-Type": "multipart/form-data"
+            },
+            "body": "FormData with 'file' and optional 'description'",
+            "note": "Upload file directly. Backend will upload to Cloudinary and store the URL. Max 50MB."
         },
         "get_evidence": {
             "url": "{{host}}/leader/tasks/1/evidence",

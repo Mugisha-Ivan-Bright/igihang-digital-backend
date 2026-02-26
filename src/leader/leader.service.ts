@@ -3,9 +3,11 @@ import {
     NotFoundException,
     ForbiddenException,
     Inject,
+    BadRequestException,
 } from '@nestjs/common';
 import { NotificationService } from '../notifications/notification.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { NotificationType, TaskStatus, UserRole } from '@prisma/client';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { AddEvidenceDto } from './dto/add-evidence.dto';
@@ -30,6 +32,7 @@ export class LeaderService {
     constructor(
         @Inject('PRISMA_TOKEN') private readonly prisma: PrismaService,
         private readonly notificationService: NotificationService,
+        private readonly cloudinaryService: CloudinaryService,
     ) { }
 
     // ─── Hierarchy ────────────────────────────────────────────────────────────
@@ -186,7 +189,13 @@ export class LeaderService {
     // ─── Evidence ──────────────────────────────────────────────────────────────
 
     async addEvidence(taskId: number, dto: AddEvidenceDto, uploaderId: number) {
-        const task = await this.prisma.imihigoTask.findUnique({ where: { id: taskId } });
+        const task = await this.prisma.imihigoTask.findUnique({
+            where: { id: taskId },
+            include: {
+                issuer: { select: { id: true, name: true } },
+                assignee: { select: { id: true, name: true } },
+            }
+        });
         if (!task) throw new NotFoundException('Task not found');
 
         const evidence = await this.prisma.taskEvidence.create({
@@ -203,20 +212,92 @@ export class LeaderService {
             },
         });
 
-        // Notify the task issuer
-        if (task.issuerId !== uploaderId) {
+        // Get uploader name for notification message
+        const uploader = await this.prisma.user.findUnique({
+            where: { id: uploaderId },
+            select: { name: true }
+        });
+
+        // Notify both issuer and assignee (skip the uploader)
+        const notifyIds = [task.issuerId, task.assigneeId].filter((id) => id !== uploaderId);
+        for (const recipientId of notifyIds) {
             await this.notificationService.create({
-                recipientId: task.issuerId,
+                recipientId,
                 senderId: uploaderId,
                 type: NotificationType.EVIDENCE_UPLOADED,
                 title: 'Evidence Uploaded',
-                message: `New evidence uploaded for task "${task.title}"`,
+                message: `${uploader?.name || 'Someone'} uploaded new evidence for task "${task.title}"${dto.description ? ': ' + dto.description : ''}`,
                 linkId: task.id,
                 linkTable: 'ImihigoTask',
             });
         }
 
         return evidence;
+    }
+
+    async uploadEvidence(
+        taskId: number,
+        file: Express.Multer.File,
+        description: string,
+        uploaderId: number,
+    ) {
+        if (!file) {
+            throw new BadRequestException('No file provided');
+        }
+
+        const task = await this.prisma.imihigoTask.findUnique({
+            where: { id: taskId },
+            include: {
+                issuer: { select: { id: true, name: true } },
+                assignee: { select: { id: true, name: true } },
+            }
+        });
+        if (!task) throw new NotFoundException('Task not found');
+
+        // Upload to Cloudinary
+        const uploadResult = await this.cloudinaryService.uploadFile(file, 'igihango/evidence');
+
+        // Create evidence record with Cloudinary URL
+        const evidence = await this.prisma.taskEvidence.create({
+            data: {
+                fileUrl: uploadResult.secure_url,
+                evidenceType: file.mimetype,
+                description: description || `${file.originalname}`,
+                taskId,
+                uploadedById: uploaderId,
+            },
+            include: {
+                uploadedBy: { select: { id: true, name: true, email: true } },
+                task: { select: { id: true, title: true } },
+            },
+        });
+
+        // Get uploader name for notification message
+        const uploader = await this.prisma.user.findUnique({
+            where: { id: uploaderId },
+            select: { name: true }
+        });
+
+        // Notify both issuer and assignee (skip the uploader)
+        const notifyIds = [task.issuerId, task.assigneeId].filter((id) => id !== uploaderId);
+        for (const recipientId of notifyIds) {
+            await this.notificationService.create({
+                recipientId,
+                senderId: uploaderId,
+                type: NotificationType.EVIDENCE_UPLOADED,
+                title: 'Evidence Uploaded',
+                message: `${uploader?.name || 'Someone'} uploaded new evidence for task "${task.title}"${description ? ': ' + description : ''}`,
+                linkId: task.id,
+                linkTable: 'ImihigoTask',
+            });
+        }
+
+        return {
+            ...evidence,
+            cloudinaryPublicId: uploadResult.public_id,
+            fileSize: uploadResult.bytes,
+            format: uploadResult.format,
+        };
     }
 
     async getTaskEvidence(taskId: number) {
@@ -233,7 +314,13 @@ export class LeaderService {
     // ─── Comments ──────────────────────────────────────────────────────────────
 
     async addComment(taskId: number, dto: AddCommentDto, authorId: number) {
-        const task = await this.prisma.imihigoTask.findUnique({ where: { id: taskId } });
+        const task = await this.prisma.imihigoTask.findUnique({
+            where: { id: taskId },
+            include: {
+                issuer: { select: { id: true, name: true } },
+                assignee: { select: { id: true, name: true } },
+            }
+        });
         if (!task) throw new NotFoundException('Task not found');
 
         const comment = await this.prisma.commentAudit.create({
@@ -247,6 +334,12 @@ export class LeaderService {
             },
         });
 
+        // Get author name for notification message
+        const author = await this.prisma.user.findUnique({
+            where: { id: authorId },
+            select: { name: true }
+        });
+
         // Notify both issuer and assignee (skip the commenter)
         const notifyIds = [task.issuerId, task.assigneeId].filter((id) => id !== authorId);
         for (const recipientId of notifyIds) {
@@ -255,7 +348,7 @@ export class LeaderService {
                 senderId: authorId,
                 type: NotificationType.COMMENT_ADDED,
                 title: 'New Comment on Task',
-                message: `A new comment was added to "${task.title}"`,
+                message: `${author?.name || 'Someone'} commented on "${task.title}": ${dto.content.substring(0, 100)}${dto.content.length > 100 ? '...' : ''}`,
                 linkId: task.id,
                 linkTable: 'ImihigoTask',
             });
