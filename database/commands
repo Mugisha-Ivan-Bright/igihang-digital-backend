@@ -160,3 +160,4 @@ INSERT INTO "AdminUnit" (name, level, code, "parentId") VALUES
 
 INSERT INTO "AdminUnit" (name, level, code, "parentId") VALUES 
 ('Nyarugenge Sector', 'SECTOR', '1101', (SELECT id FROM "AdminUnit" WHERE code = '11'));
+
